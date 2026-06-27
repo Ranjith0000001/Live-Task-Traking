@@ -11,6 +11,9 @@ model Task {
   id        Int      @id @default(autoincrement())
   title     String
   status    String   @default("todo") // todo, inprogress, done
+  assignee  String
+  deadline  DateTime
+  effortHrs Float
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

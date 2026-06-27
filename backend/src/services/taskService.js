@@ -10,9 +10,9 @@ const getTaskById = async (id) => {
 
 
 
-const createTask = async (title) => {
+const createTask = async ({ title, assignee, deadline, effortHrs }) => {
     return await prisma.task.create({
-        data: { title, status: "todo" },
+        data: { title, status: "todo", assignee, deadline: new Date(deadline), effortHrs: parseFloat(effortHrs) },
     });
 };
 

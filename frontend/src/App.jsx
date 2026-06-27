@@ -18,6 +18,9 @@ import {
   DialogActions,
   Alert,
   Snackbar,
+  Avatar,
+  Badge,
+  Tooltip,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -26,6 +29,10 @@ import {
   MoreVert as MoreVertIcon,
   Wifi as WifiIcon,
   WifiOff as WifiOffIcon,
+  Person as PersonIcon,
+  CalendarToday as CalendarIcon,
+  AccessTime as TimeIcon,
+  Schedule as ScheduleIcon,
 } from "@mui/icons-material";
 
 import { useWebSocket } from "./hooks/useWebSocket"; // ADD THIS
@@ -40,21 +47,26 @@ const COLUMNS = [
 
 function App() {
   // Use WebSocket hook
-  const { 
-    isConnected, 
-    boardState: wsBoardState, 
-    setBoardState: setWsBoardState 
+  const {
+    isConnected,
+    boardState: wsBoardState,
+    setBoardState: setWsBoardState,
+    connectedUsers = []
   } = useWebSocket();
 
   // Local state
   const [tasks, setTasks] = useState({ todo: [], inprogress: [], done: [] });
-  const [newTaskText, setNewTaskText] = useState("");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editText, setEditText] = useState("");
   const [dragTask, setDragTask] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newAssignee, setNewAssignee] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
+  const [newEffortHrs, setNewEffortHrs] = useState("");
 
   // Sync WebSocket board state with local state (after initial load, this keeps tasks in sync)
   useEffect(() => {
@@ -92,11 +104,19 @@ function App() {
 
   // Create task
   const handleAddTask = async () => {
-    if (!newTaskText.trim()) return;
+    if (!newTitle.trim()) return;
     try {
-      await axios.post(API, { title: newTaskText.trim() });
-      setNewTaskText("");
-      await fetchTasks(); // Refresh to get updated state
+      await axios.post(API, {
+        title: newTitle.trim(),
+        assignee: newAssignee.trim(),
+        deadline: newDeadline,
+        effortHrs: parseFloat(newEffortHrs),
+      });
+      setNewTitle("");
+      setNewAssignee("");
+      setNewDeadline("");
+      setNewEffortHrs("");
+      setAddDialogOpen(false);
       showSnackbar("Task created successfully!");
     } catch (err) {
       console.error("Error creating task:", err);
@@ -244,40 +264,39 @@ function App() {
                 fontWeight: 500,
               }}
             />
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              {connectedUsers.map((user) => (
+                <Tooltip key={user.id} title={user.name} arrow>
+                  <Avatar
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      fontSize: 12,
+                      bgcolor: user.color,
+                      border: "2px solid #fff",
+                      ml: -1,
+                    }}
+                  >
+                    {user.name?.[0] || '?'}
+                  </Avatar>
+                </Tooltip>
+              ))}
+            </Box>
           </Box>
         </Box>
 
-        {/* Add Task Input */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 2,
-            mb: 4,
-            display: "flex",
-            gap: 2,
-            borderRadius: 2,
-            border: "1px solid #e0e0e0",
-          }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Enter task description..."
-            value={newTaskText}
-            onChange={(e) => setNewTaskText(e.target.value)}
-            onKeyPress={handleKeyPress}
-            variant="outlined"
-          />
+        {/* Add Task Button */}
+        <Box sx={{ mb: 3, display: "flex", justifyContent: "flex-end" }}>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={handleAddTask}
-            disabled={!newTaskText.trim() || !isConnected}
-            sx={{ whiteSpace: "nowrap", minWidth: 120 }}
+            onClick={() => setAddDialogOpen(true)}
+            disabled={!isConnected}
+            sx={{ borderRadius: 2, px: 3, py: 1 }}
           >
             Add Task
           </Button>
-        </Paper>
+        </Box>
 
         {/* Realtime Status Alert */}
         {!isConnected && (
@@ -378,15 +397,44 @@ function App() {
                           borderLeft: `4px solid ${column.color}`,
                         }}
                       >
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            flex: 1,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {task.title}
-                        </Typography>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 500,
+                              wordBreak: "break-word",
+                              mb: 0.5,
+                            }}
+                          >
+                            {task.title}
+                          </Typography>
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3 }}>
+                            {task.assignee && (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                <PersonIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                                <Typography variant="caption" color="text.secondary">
+                                  {task.assignee}
+                                </Typography>
+                              </Box>
+                            )}
+                            {task.deadline && (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                <CalendarIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                                <Typography variant="caption" color="text.secondary">
+                                  {new Date(task.deadline).toLocaleDateString()}
+                                </Typography>
+                              </Box>
+                            )}
+                            {task.effortHrs && (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                <TimeIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+                                <Typography variant="caption" color="text.secondary">
+                                  {task.effortHrs}h
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        </Box>
                         <IconButton
                           size="small"
                           onClick={(e) => handleMenuOpen(e, task)}
@@ -442,6 +490,79 @@ function App() {
             Delete
           </MenuItem>
         </Menu>
+
+        {/* Add Task Dialog */}
+        <Dialog
+          open={addDialogOpen}
+          onClose={() => setAddDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Create New Task</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              fullWidth
+              margin="dense"
+              label="Title *"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              variant="outlined"
+            />
+            <TextField
+              fullWidth
+              margin="dense"
+              label="Assignee *"
+              value={newAssignee}
+              onChange={(e) => setNewAssignee(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <PersonIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+              }}
+              variant="outlined"
+            />
+            <TextField
+              fullWidth
+              margin="dense"
+              label="Deadline *"
+              type="date"
+              value={newDeadline}
+              onChange={(e) => setNewDeadline(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <CalendarIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+              }}
+              InputLabelProps={{ shrink: true }}
+              variant="outlined"
+            />
+            <TextField
+              fullWidth
+              margin="dense"
+              label="Effort Hours *"
+              type="number"
+              value={newEffortHrs}
+              onChange={(e) => setNewEffortHrs(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <TimeIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+              }}
+              variant="outlined"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setAddDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddTask}
+              variant="contained"
+              disabled={!newTitle.trim() || !newAssignee.trim() || !newDeadline || !newEffortHrs}
+            >
+              Create Task
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Edit Task Dialog */}
         <Dialog

@@ -8,8 +8,29 @@ export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [lastMessage, setLastMessage] = useState(null);
     const [boardState, setBoardState] = useState({ todo: [], inprogress: [], done: [] });
+    const [connectedUsers, setConnectedUsers] = useState([]);
     const wsRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
+    const localUserRef = useRef(null);
+
+    const getLocalUser = () => {
+        if (typeof window === "undefined") return null;
+        const stored = window.localStorage.getItem("board_user");
+        if (stored) {
+            try {
+                return JSON.parse(stored);
+            } catch {
+                // ignore
+            }
+        }
+        const user = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            name: `User ${Math.floor(Math.random() * 9000) + 1000}`,
+            color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`,
+        };
+        window.localStorage.setItem("board_user", JSON.stringify(user));
+        return user;
+    };
 
     // Connect to WebSocket
     const connect = useCallback(() => {

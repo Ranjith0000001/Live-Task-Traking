@@ -15,16 +15,34 @@ const getAllTasks = async (req, res) => {
 
 const createTask = async (req, res) => {
     try {
-        const { title } = req.body;
+        const { title, assignee, deadline, effortHrs } = req.body;
         if (!title || !title.trim()) {
             return res.status(400).json({ error: "Title is required" });
         }
-        const task = await taskService.createTask(title.trim());
+        if (!assignee || !assignee.trim()) {
+            return res.status(400).json({ error: "Assignee is required" });
+        }
+        if (!deadline) {
+            return res.status(400).json({ error: "Deadline is required" });
+        }
+        if (effortHrs === undefined || effortHrs === null || isNaN(Number(effortHrs))) {
+            return res.status(400).json({ error: "Effort hours is required" });
+        }
+        const parsedEffort = parseFloat(effortHrs);
+        if (parsedEffort < 0) {
+            return res.status(400).json({ error: "Effort hours must be positive" });
+        }
+        const task = await taskService.createTask({ title: title.trim(), assignee: assignee.trim(), deadline, effortHrs: parsedEffort });
         const allTasks = await taskService.getAllTasks();
         const groupedTasks = groupTasksByStatus(allTasks);
         updateCurrentState(groupedTasks);
-        broadcastUpdate({ type: 'TASK_ADDED', payload: { task } });
-        res.status(201).json(task);
+        const createdTask = {
+            ...task,
+            deadline: task.deadline ? task.deadline.toISOString() : null,
+            effortHrs: Number(task.effortHrs)
+        };
+        broadcastUpdate({ type: 'TASK_ADDED', payload: { task: createdTask } });
+        res.status(201).json(createdTask);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -49,15 +67,20 @@ const updateTask = async (req, res) => {
         const allTasks = await taskService.getAllTasks();
         const groupedTasks = groupTasksByStatus(allTasks);
         updateCurrentState(groupedTasks);
+        const updatedTask = {
+            ...task,
+            deadline: task.deadline ? task.deadline.toISOString() : null,
+            effortHrs: Number(task.effortHrs)
+        };
         broadcastUpdate({
             type: 'TASK_UPDATED',
             payload: {
-                task: task,
+                task: updatedTask,
                 oldStatus: oldStatus,
                 changes: { title, status }
             }
         });
-        res.json(task);
+        res.json(updatedTask);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
