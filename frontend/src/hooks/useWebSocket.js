@@ -49,20 +49,20 @@ export function useWebSocket() {
                         setBoardState(prev => {
                             const newState = { ...prev };
                             const task = data.payload.task;
-                            const oldStatus = data.payload.changes.status;
-                            
-                            // If status changed, remove from old column and add to new
-                            if (oldStatus && oldStatus !== task.status) {
-                                newState[oldStatus] = newState[oldStatus].filter(t => t.id !== task.id);
-                                newState[task.status] = [...newState[task.status], task];
-                            } else {
-                                // Just update the task in place
-                                const column = task.status;
-                                const index = newState[column].findIndex(t => t.id === task.id);
-                                if (index !== -1) {
-                                    newState[column][index] = task;
-                                }
+                            const oldStatus = data.payload.oldStatus;
+                            const changedStatus = (data.payload.changes && data.payload.changes.status) || task.status;
+
+                            // FIRST: remove this task from every column (defense against stale state)
+                            Object.keys(newState).forEach(key => {
+                                newState[key] = newState[key].filter(t => t.id !== task.id);
+                            });
+
+                            // SECOND: add it to the correct target column
+                            if (!newState[changedStatus]) {
+                                newState[changedStatus] = [];
                             }
+                            newState[changedStatus] = [...newState[changedStatus], task];
+
                             return newState;
                         });
                         break;

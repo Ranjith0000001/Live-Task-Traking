@@ -8,7 +8,6 @@ const getAllTasks = async (req, res) => {
         const groupedTasks = groupTasksByStatus(tasks);
         updateCurrentState(groupedTasks); 
         res.json(tasks);
-        
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -21,19 +20,10 @@ const createTask = async (req, res) => {
             return res.status(400).json({ error: "Title is required" });
         }
         const task = await taskService.createTask(title.trim());
-
         const allTasks = await taskService.getAllTasks();
         const groupedTasks = groupTasksByStatus(allTasks);
-        
         updateCurrentState(groupedTasks);
-        
-        broadcastUpdate({ 
-            type: 'TASK_ADDED',
-            payload: {
-                task: task,
-                status: 'todo'
-            }
-        });
+        broadcastUpdate({ type: 'TASK_ADDED', payload: { task } });
         res.status(201).json(task);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -44,25 +34,26 @@ const updateTask = async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const { title, status } = req.body;
-
         if (status && !["todo", "inprogress", "done"].includes(status)) {
             return res.status(400).json({ error: "Invalid status" });
         }
-
+        const existingTask = await taskService.getTaskById(id);
+        if (!existingTask) {
+            return res.status(404).json({ error: "Task not found" });
+        }
+        const oldStatus = existingTask.status;
         const task = await taskService.updateTask(id, { title, status });
         if (!task) {
             return res.status(404).json({ error: "Task not found" });
         }
-
-          const allTasks = await taskService.getAllTasks();
+        const allTasks = await taskService.getAllTasks();
         const groupedTasks = groupTasksByStatus(allTasks);
-        
-        updateCurrentState(groupedTasks); 
-        
-        broadcastUpdate({ 
+        updateCurrentState(groupedTasks);
+        broadcastUpdate({
             type: 'TASK_UPDATED',
             payload: {
                 task: task,
+                oldStatus: oldStatus,
                 changes: { title, status }
             }
         });
@@ -79,19 +70,10 @@ const deleteTask = async (req, res) => {
         if (!task) {
             return res.status(404).json({ error: "Task not found" });
         }
-
         const allTasks = await taskService.getAllTasks();
         const groupedTasks = groupTasksByStatus(allTasks);
-        
-        updateCurrentState(groupedTasks); 
-        
-        broadcastUpdate({ 
-            type: 'TASK_DELETED',
-            payload: {
-                taskId: id,
-                task: task
-            }
-        });
+        updateCurrentState(groupedTasks);
+        broadcastUpdate({ type: 'TASK_DELETED', payload: { taskId: id, task } });
         res.json({ message: "Task deleted", task });
     } catch (error) {
         res.status(500).json({ error: error.message });

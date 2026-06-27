@@ -56,7 +56,7 @@ function App() {
   const [dragTask, setDragTask] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
-  // Sync WebSocket board state with local state
+  // Sync WebSocket board state with local state (after initial load, this keeps tasks in sync)
   useEffect(() => {
     if (Object.keys(wsBoardState).length > 0) {
       setTasks(wsBoardState);
@@ -111,7 +111,6 @@ function App() {
       await axios.delete(`${API}/${selectedTask.id}`);
       setAnchorEl(null);
       setSelectedTask(null);
-      await fetchTasks();
       showSnackbar("Task deleted!");
     } catch (err) {
       console.error("Error deleting task:", err);
@@ -133,7 +132,6 @@ function App() {
       });
       setAnchorEl(null);
       setSelectedTask(null);
-      await fetchTasks();
       showSnackbar(`Task moved to ${COLUMNS[targetIndex].title}`);
     } catch (err) {
       console.error("Error moving task:", err);
@@ -157,7 +155,6 @@ function App() {
       });
       setEditDialogOpen(false);
       setSelectedTask(null);
-      await fetchTasks();
       showSnackbar("Task updated!");
     } catch (err) {
       console.error("Error updating task:", err);
@@ -184,13 +181,16 @@ function App() {
     try {
       await axios.put(`${API}/${dragTask.id}`, { status: targetStatus });
       setDragTask(null);
-      await fetchTasks();
-      showSnackbar(`Task moved to ${COLUMNS.find(c => c.id === targetStatus).title}`);
     } catch (err) {
       console.error("Error moving task:", err);
       showSnackbar("Error moving task", "error");
     }
   };
+  const handleDragEnd = () => {
+    setDragTask(null);
+  };
+
+
 
   // Menu handlers
   const handleMenuOpen = (event, task) => {
@@ -360,6 +360,7 @@ function App() {
                         elevation={1}
                         draggable={isConnected}
                         onDragStart={() => handleDragStart(task)}
+                        onDragEnd={handleDragEnd}
                         sx={{
                           p: 1.5,
                           mb: 1.5,
