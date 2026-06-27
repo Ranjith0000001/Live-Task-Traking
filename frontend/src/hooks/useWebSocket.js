@@ -6,6 +6,7 @@ const WS_URL = 'ws://localhost:5000/ws';
 
 export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false); // new state
     const [lastMessage, setLastMessage] = useState(null);
     const [boardState, setBoardState] = useState({ todo: [], inprogress: [], done: [] });
     const [connectedUsers, setConnectedUsers] = useState([]);
@@ -45,6 +46,7 @@ export function useWebSocket() {
         ws.onopen = () => {
             console.log('✅ WebSocket connected');
             setIsConnected(true);
+            setIsReconnecting(false);
         };
 
         ws.onmessage = (event) => {
@@ -55,6 +57,9 @@ export function useWebSocket() {
 
                 // Handle different message types
                 switch (data.type) {
+                    case 'USERS_UPDATE':
+                        setConnectedUsers(data.payload || []);
+                        break;
                     case 'INITIAL_STATE':
                         setBoardState(data.payload);
                         break;
@@ -109,7 +114,9 @@ export function useWebSocket() {
         ws.onclose = () => {
             console.log('❌ WebSocket disconnected');
             setIsConnected(false);
-            
+            setIsReconnecting(true);
+            setConnectedUsers([]);
+
             // Auto-reconnect after 3 seconds
             reconnectTimeoutRef.current = setTimeout(() => {
                 console.log('🔄 Attempting to reconnect...');
@@ -151,9 +158,11 @@ export function useWebSocket() {
 
     return {
         isConnected,
+        isReconnecting,
         boardState,
         setBoardState, // Allow manual state updates
         lastMessage,
+        connectedUsers,
         sendMessage,
         reconnect: connect
     };
