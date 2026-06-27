@@ -16,13 +16,19 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
+  Snackbar,
 } from "@mui/material";
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   MoreVert as MoreVertIcon,
+  Wifi as WifiIcon,
+  WifiOff as WifiOffIcon,
 } from "@mui/icons-material";
+
+import { useWebSocket } from "./hooks/useWebSocket"; // ADD THIS
 
 const API = "http://localhost:5000/api/tasks";
 
@@ -33,6 +39,14 @@ const COLUMNS = [
 ];
 
 function App() {
+  // Use WebSocket hook
+  const { 
+    isConnected, 
+    boardState: wsBoardState, 
+    setBoardState: setWsBoardState 
+  } = useWebSocket();
+
+  // Local state
   const [tasks, setTasks] = useState({ todo: [], inprogress: [], done: [] });
   const [newTaskText, setNewTaskText] = useState("");
   const [anchorEl, setAnchorEl] = useState(null);
@@ -40,8 +54,16 @@ function App() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editText, setEditText] = useState("");
   const [dragTask, setDragTask] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
-  // Fetch tasks from API
+  // Sync WebSocket board state with local state
+  useEffect(() => {
+    if (Object.keys(wsBoardState).length > 0) {
+      setTasks(wsBoardState);
+    }
+  }, [wsBoardState]);
+
+  // Fetch tasks from API (initial load)
   const fetchTasks = async () => {
     try {
       const { data } = await axios.get(API);
@@ -52,8 +74,10 @@ function App() {
         }
       });
       setTasks(grouped);
+      setWsBoardState(grouped); // Update WebSocket state
     } catch (err) {
       console.error("Error fetching tasks:", err);
+      showSnackbar("Error fetching tasks", "error");
     }
   };
 
@@ -61,15 +85,22 @@ function App() {
     fetchTasks();
   }, []);
 
+  // Show notification
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
   // Create task
   const handleAddTask = async () => {
     if (!newTaskText.trim()) return;
     try {
       await axios.post(API, { title: newTaskText.trim() });
       setNewTaskText("");
-      fetchTasks();
+      await fetchTasks(); // Refresh to get updated state
+      showSnackbar("Task created successfully!");
     } catch (err) {
       console.error("Error creating task:", err);
+      showSnackbar("Error creating task", "error");
     }
   };
 
@@ -80,9 +111,11 @@ function App() {
       await axios.delete(`${API}/${selectedTask.id}`);
       setAnchorEl(null);
       setSelectedTask(null);
-      fetchTasks();
+      await fetchTasks();
+      showSnackbar("Task deleted!");
     } catch (err) {
       console.error("Error deleting task:", err);
+      showSnackbar("Error deleting task", "error");
     }
   };
 
@@ -100,9 +133,11 @@ function App() {
       });
       setAnchorEl(null);
       setSelectedTask(null);
-      fetchTasks();
+      await fetchTasks();
+      showSnackbar(`Task moved to ${COLUMNS[targetIndex].title}`);
     } catch (err) {
       console.error("Error moving task:", err);
+      showSnackbar("Error moving task", "error");
     }
   };
 
@@ -122,9 +157,11 @@ function App() {
       });
       setEditDialogOpen(false);
       setSelectedTask(null);
-      fetchTasks();
+      await fetchTasks();
+      showSnackbar("Task updated!");
     } catch (err) {
       console.error("Error updating task:", err);
+      showSnackbar("Error updating task", "error");
     }
   };
 
@@ -147,9 +184,11 @@ function App() {
     try {
       await axios.put(`${API}/${dragTask.id}`, { status: targetStatus });
       setDragTask(null);
-      fetchTasks();
+      await fetchTasks();
+      showSnackbar(`Task moved to ${COLUMNS.find(c => c.id === targetStatus).title}`);
     } catch (err) {
       console.error("Error moving task:", err);
+      showSnackbar("Error moving task", "error");
     }
   };
 
@@ -168,18 +207,45 @@ function App() {
     if (e.key === "Enter") handleAddTask();
   };
 
+  // Get connection status color
+  const getStatusColor = () => {
+    return isConnected ? "success.main" : "error.main";
+  };
+
   return (
     <Box sx={{ bgcolor: "#f5f5f5", minHeight: "100vh", py: 4 }}>
       <Container maxWidth="lg">
-        <Typography
-          variant="h4"
-          component="h1"
-          align="center"
-          gutterBottom
-          sx={{ fontWeight: 700, mb: 4, color: "#333" }}
-        >
-          Task Board
-        </Typography>
+        {/* Header with Connection Status */}
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 3 }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontWeight: 700, color: "#333" }}
+          >
+            Task Board
+          </Typography>
+          
+          {/* Connection Status Badge */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {isConnected ? (
+              <WifiIcon sx={{ color: "success.main" }} />
+            ) : (
+              <WifiOffIcon sx={{ color: "error.main" }} />
+            )}
+            <Typography variant="body2" sx={{ color: getStatusColor() }}>
+              {isConnected ? "Live" : "Offline"}
+            </Typography>
+            <Chip
+              label={isConnected ? "🟢 Connected" : "🔴 Disconnected"}
+              size="small"
+              sx={{
+                bgcolor: isConnected ? "#e8f5e9" : "#ffebee",
+                color: isConnected ? "#2e7d32" : "#c62828",
+                fontWeight: 500,
+              }}
+            />
+          </Box>
+        </Box>
 
         {/* Add Task Input */}
         <Paper
@@ -206,12 +272,19 @@ function App() {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleAddTask}
-            disabled={!newTaskText.trim()}
+            disabled={!newTaskText.trim() || !isConnected}
             sx={{ whiteSpace: "nowrap", minWidth: 120 }}
           >
             Add Task
           </Button>
         </Paper>
+
+        {/* Realtime Status Alert */}
+        {!isConnected && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            You are offline. Changes will not sync in real-time. Reconnecting...
+          </Alert>
+        )}
 
         {/* Kanban Columns */}
         <Grid container spacing={2}>
@@ -260,7 +333,7 @@ function App() {
                     {column.title}
                   </Typography>
                   <Chip
-                    label={tasks[column.id].length}
+                    label={tasks[column.id]?.length || 0}
                     size="small"
                     sx={{
                       bgcolor: column.color,
@@ -271,7 +344,7 @@ function App() {
                 </Box>
 
                 <Box sx={{ flex: 1 }}>
-                  {tasks[column.id].length === 0 ? (
+                  {tasks[column.id]?.length === 0 ? (
                     <Typography
                       variant="body2"
                       color="text.secondary"
@@ -281,14 +354,12 @@ function App() {
                       No tasks
                     </Typography>
                   ) : (
-                    tasks[column.id].map((task) => (
+                    tasks[column.id]?.map((task) => (
                       <Paper
                         key={task.id}
                         elevation={1}
-                        draggable
-                        onDragStart={() =>
-                          handleDragStart(task)
-                        }
+                        draggable={isConnected}
+                        onDragStart={() => handleDragStart(task)}
                         sx={{
                           p: 1.5,
                           mb: 1.5,
@@ -296,17 +367,14 @@ function App() {
                           display: "flex",
                           alignItems: "center",
                           gap: 1,
-                          cursor: "grab",
+                          cursor: isConnected ? "grab" : "default",
                           transition: "all 0.2s",
                           "&:hover": {
-                            boxShadow: 3,
-                            transform:
-                              "translateY(-1px)",
+                            boxShadow: isConnected ? 3 : 1,
+                            transform: isConnected ? "translateY(-1px)" : "none",
                           },
-                          opacity:
-                            dragTask?.id === task.id
-                              ? 0.4
-                              : 1,
+                          opacity: dragTask?.id === task.id ? 0.4 : 1,
+                          borderLeft: `4px solid ${column.color}`,
                         }}
                       >
                         <Typography
@@ -320,9 +388,8 @@ function App() {
                         </Typography>
                         <IconButton
                           size="small"
-                          onClick={(e) =>
-                            handleMenuOpen(e, task)
-                          }
+                          onClick={(e) => handleMenuOpen(e, task)}
+                          disabled={!isConnected}
                         >
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
@@ -410,6 +477,22 @@ function App() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={3000}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        >
+          <Alert 
+            onClose={() => setSnackbar({ ...snackbar, open: false })} 
+            severity={snackbar.severity}
+            sx={{ width: "100%" }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Container>
     </Box>
   );
